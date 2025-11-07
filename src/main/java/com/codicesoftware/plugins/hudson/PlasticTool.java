@@ -8,6 +8,7 @@ import hudson.Proc;
 import hudson.model.TaskListener;
 import hudson.util.ArgumentListBuilder;
 import hudson.util.ForkOutputStream;
+import jenkins.model.Jenkins;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -32,8 +33,19 @@ public class PlasticTool {
     private static final int MAX_RETRIES = 3;
     private static final int TIME_BETWEEN_RETRIES = 1000;
 
+    @Nonnull
+    private static String getPluginVersion() {
+        try {
+            hudson.PluginWrapper plugin = Jenkins.get().getPluginManager().getPlugin("plasticscm-plugin");
+            return plugin != null ? plugin.getVersion() : "unknown";
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
     @CheckForNull
     private final CmTool tool;
+    private boolean toolValidated = false;
     @Nonnull
     private final Launcher launcher;
     @Nonnull
@@ -57,6 +69,72 @@ public class PlasticTool {
     }
 
     /**
+     * Validate that the cm tool is available and executable.
+     * This runs 'cm version' to check if cm is available.
+     *
+     * @throws IOException Operation error
+     * @throws InterruptedException Process has been interrupted
+     */
+    private void validateCmTool() throws IOException, InterruptedException {
+        if (tool == null) {
+            return;
+        }
+
+        String cmPath = tool.getCmPath();
+        LOGGER.info("Validating Plastic SCM cm tool at: " + cmPath);
+        listener.getLogger().println("===== PlasticSCM Plugin v" + getPluginVersion() + " =====");
+        listener.getLogger().println("Validating Plastic SCM cm tool: " + cmPath);
+
+        ArgumentListBuilder versionCmd = new ArgumentListBuilder(cmPath);
+        versionCmd.add("version");
+
+        ByteArrayOutputStream consoleStream = new ByteArrayOutputStream();
+
+        try {
+            Launcher.ProcStarter procL = launcher.launch()
+                .cmds(versionCmd)
+                .stdout(consoleStream)
+                .stderr(consoleStream)
+                .pwd(workspace);
+
+            if (tool.isUseInvariantCulture()) {
+                Map<String, String> envsMap = new HashMap<>();
+                envsMap.put("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1");
+                procL.envs(envsMap);
+            }
+
+            Proc proc = procL.start();
+            int exitCode = proc.join();
+
+            consoleStream.close();
+            String output = consoleStream.toString(StandardCharsets.UTF_8.name()).trim();
+
+            if (exitCode == 0) {
+                LOGGER.info("Plastic SCM cm tool validated successfully. Version info: " + output);
+                listener.getLogger().println("Plastic SCM cm tool validated: " + output);
+            } else {
+                String errorMessage = String.format(
+                    "Failed to validate Plastic SCM cm tool at '%s'. " +
+                    "Exit code: %d. Output: %s. " +
+                    "Please check that Plastic SCM is installed and the cm executable path is correct.",
+                    cmPath, exitCode, output);
+                LOGGER.severe(errorMessage);
+                listener.fatalError(errorMessage);
+                throw new AbortException(errorMessage);
+            }
+        } catch (IOException e) {
+            String errorMessage = String.format(
+                "Failed to execute Plastic SCM cm tool at '%s'. " +
+                "Error: %s. " +
+                "Please check that Plastic SCM is installed and the cm executable path is correct in Jenkins configuration.",
+                cmPath, e.getMessage());
+            LOGGER.severe(errorMessage);
+            listener.fatalError(errorMessage);
+            throw new AbortException(errorMessage);
+        }
+    }
+
+    /**
      * Execute the arguments, and return the console output as a Reader
      *
      * @param arguments arguments to send to the command-line client.
@@ -76,6 +154,12 @@ public class PlasticTool {
             boolean printOutput) throws IOException, InterruptedException {
         if (tool == null) {
             throw new InterruptedException("You need to specify a Plastic SCM tool");
+        }
+
+        // Validate cm tool is available on first use
+        if (!toolValidated) {
+            validateCmTool();
+            toolValidated = true;
         }
 
         ArgumentListBuilder cmdArgs = getToolArguments(arguments, clientConfigurationArguments);
@@ -126,11 +210,13 @@ public class PlasticTool {
         if (executionPath == null) {
             executionPath = workspace;
         }
-        ByteArrayOutputStream consoleStream = new ByteArrayOutputStream();
+        ByteArrayOutputStream stdoutStream = new ByteArrayOutputStream();
 
+        // Don't capture stderr at all on Windows - causes handle issues
         Launcher.ProcStarter procL = launcher.launch()
             .cmds(args)
-            .stdout(printOutput ? new ForkOutputStream(consoleStream, listener.getLogger()) : consoleStream)
+            .stdout(stdoutStream)
+            // .stderr() - let stderr go to parent process without capturing
             .pwd(executionPath);
 
         if (tool.isUseInvariantCulture()) {
@@ -140,13 +226,20 @@ public class PlasticTool {
         }
 
         Proc proc = procL.start();
-        consoleStream.close();
+        int exitCode = proc.join();
 
-        if (proc.join() == 0) {
+        stdoutStream.close();
+
+        if (exitCode == 0) {
             LOGGER.fine("Command succeeded: " + args);
-            return new InputStreamReader(new ByteArrayInputStream(consoleStream.toByteArray()), StandardCharsets.UTF_8);
+            return new InputStreamReader(new ByteArrayInputStream(stdoutStream.toByteArray()), StandardCharsets.UTF_8);
         } else {
-            LOGGER.fine("Command failed: " + args);
+            String stdoutOutput = stdoutStream.toString(StandardCharsets.UTF_8.name());
+            if (!stdoutOutput.isEmpty()) {
+                LOGGER.warning("Command failed: " + args + "\nOutput: " + stdoutOutput);
+            } else {
+                LOGGER.warning("Command failed with exit code " + exitCode + ": " + args);
+            }
             return null;
         }
     }

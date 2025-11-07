@@ -46,6 +46,7 @@ public class PlasticSCMFile extends SCMFile {
     public PlasticSCMFile(@Nonnull final PlasticSCMFileSystem fs) {
         this.fs = fs;
         this.isDir = true;
+        LOGGER.info("PlasticSCMFile: ROOT created for owner=" + fs.getOwner().getFullName());
     }
 
     public PlasticSCMFile(
@@ -56,6 +57,7 @@ public class PlasticSCMFile extends SCMFile {
         super(parent, name);
         this.fs = fs;
         this.isDir = isDir;
+        LOGGER.info("PlasticSCMFile: CHILD created, name=" + name + ", isDir=" + isDir + ", path=" + getPath());
     }
 
     @CheckForNull
@@ -232,10 +234,32 @@ public class PlasticSCMFile extends SCMFile {
         }
 
         try {
+            List<ParameterValue> parameters = getParametersForScriptFetch(fs);
+
+            // Log parameter resolution
+            LOGGER.info("=== Plastic SCM Selector Resolution Debug ===");
+            LOGGER.info("Original selector: " + workspaceInfo.getSelector());
+            LOGGER.info("Parameters count: " + parameters.size());
+            for (ParameterValue param : parameters) {
+                listener.getLogger().println("Parameter " + param.getName() + " = " + param.getValue());
+                LOGGER.info("  Parameter: " + param.getName() + " = " + param.getValue());
+            }
+
+            LOGGER.info("Environment variables relevant to BRANCH:");
+            for (String key : environment.keySet()) {
+                if (key.contains("BRANCH") || key.contains("branch")) {
+                    LOGGER.info("  Env: " + key + " = " + environment.get(key));
+                }
+            }
+
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(),
-                getParametersForScriptFetch(fs),
+                parameters,
                 environment);
+
+            listener.getLogger().println("Resolved Plastic SCM selector");
+            LOGGER.info("Resolved selector: " + resolvedSelector);
+            LOGGER.info("=== End Selector Resolution Debug ===");
 
             PlasticTool tool = new PlasticTool(
                 CmTool.get(Jenkins.get(), environment, listener),
@@ -249,7 +273,15 @@ public class PlasticSCMFile extends SCMFile {
 
             serverFile = StringUtil.ensureStartsWithSlash(serverFile);
 
-            return FileContent.getFromServer(tool, serverFile, repObjectSpec);
+            listener.getLogger().println("Fetching Jenkinsfile from Plastic SCM: " + serverFile);
+            LOGGER.info("=== Plastic SCM File Fetch Debug ===");
+            LOGGER.info("Fetching file: " + serverFile);
+            LOGGER.info("From repObjectSpec: " + repObjectSpec);
+            LOGGER.info("=== End File Fetch Debug ===");
+
+            InputStream result = FileContent.getFromServer(tool, serverFile, repObjectSpec);
+            listener.getLogger().println("Successfully retrieved Jenkinsfile from Plastic SCM");
+            return result;
         } catch (AbortException e) {
             throw new FileNotFoundException(e.getMessage());
         }

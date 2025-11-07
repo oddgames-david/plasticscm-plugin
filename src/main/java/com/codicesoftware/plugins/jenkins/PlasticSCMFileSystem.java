@@ -32,6 +32,12 @@ public class PlasticSCMFileSystem extends SCMFileSystem {
 
     protected PlasticSCMFileSystem(@Nonnull Item owner, @Nonnull PlasticSCM scm, @CheckForNull SCMRevision rev) {
         super(rev);
+        // IMPORTANT: Early logging - DO NOT MOVE OR REMOVE
+        // This is the earliest point we can log when Jenkins tries to fetch Pipeline script from SCM
+        LOGGER.info("===== PlasticSCMFileSystem CONSTRUCTOR =====");
+        LOGGER.info("Owner: " + owner.getFullName());
+        LOGGER.info("SCM: " + scm.getKey());
+        LOGGER.info("===========================================");
         this.owner = owner;
         this.scm = scm;
         this.launcher = new Launcher.LocalLauncher(new LogTaskListener(LOGGER, Level.ALL));
@@ -74,11 +80,30 @@ public class PlasticSCMFileSystem extends SCMFileSystem {
         public SCMFileSystem build(@Nonnull Item owner,
                 @Nonnull SCM scm,
                 @CheckForNull SCMRevision rev) {
+            // IMPORTANT: Early logging - DO NOT MOVE OR REMOVE
+            LOGGER.info("===== PlasticSCM Plugin v" + getPluginVersion() + " =====");
+            LOGGER.info("===== PlasticSCMFileSystem.Builder.build() CALLED =====");
+            LOGGER.info("Owner: " + owner.getFullName());
+            LOGGER.info("SCM type: " + scm.getClass().getName());
+            LOGGER.info("Is PlasticSCM: " + isPlasticSCM(scm));
+
             if (!isPlasticSCM(scm)) {
+                LOGGER.info("Not PlasticSCM, returning null");
                 return null;
             }
 
+            LOGGER.info("Creating PlasticSCMFileSystem...");
             return new PlasticSCMFileSystem(owner, (PlasticSCM) scm, rev);
+        }
+
+        @Nonnull
+        private static String getPluginVersion() {
+            try {
+                hudson.PluginWrapper plugin = jenkins.model.Jenkins.get().getPluginManager().getPlugin("plasticscm-plugin");
+                return plugin != null ? plugin.getVersion() : "unknown";
+            } catch (Exception e) {
+                return "unknown";
+            }
         }
 
         @Override

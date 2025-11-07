@@ -103,6 +103,13 @@ public class CmTool extends ToolInstallation implements NodeSpecific<CmTool>, En
 
     static CmTool getDefaultOrFirstInstallation() {
         DescriptorImpl descriptor = Jenkins.get().getDescriptorByType(CmTool.DescriptorImpl.class);
+
+        if (descriptor == null) {
+            // Descriptor not yet available - return a default tool with "cm" as path
+            // This can happen during early initialization or hot-reload
+            return new CmTool(DEFAULT, DEFAULT_CM, true, Collections.emptyList());
+        }
+
         CmTool tool = descriptor.getInstallation(DEFAULT);
 
         if (tool != null) {
@@ -129,7 +136,9 @@ public class CmTool extends ToolInstallation implements NodeSpecific<CmTool>, En
     public static void onLoaded() {
         DescriptorImpl descriptor = (DescriptorImpl) Jenkins.get().getDescriptor(CmTool.class);
         if (descriptor == null) {
-            throw new IllegalStateException("Descriptor is null");
+            // Descriptor not yet available (e.g., during hot-reload)
+            // This is safe to skip - descriptor will be available on next full startup
+            return;
         }
 
         CmTool[] installations = getInstallations(descriptor);

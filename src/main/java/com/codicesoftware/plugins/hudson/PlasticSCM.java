@@ -104,6 +104,16 @@ public class PlasticSCM extends SCM {
 
     // region Members
 
+    @Nonnull
+    private static String getPluginVersion() {
+        try {
+            hudson.PluginWrapper plugin = Jenkins.get().getPluginManager().getPlugin("plasticscm-plugin");
+            return plugin != null ? plugin.getVersion() : "unknown";
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
     private final String selector;
 
     private final CleanupMethod cleanup;
@@ -146,7 +156,7 @@ public class PlasticSCM extends SCM {
             boolean pollOnController,
             String directory,
             String workspaceName) {
-        LOGGER.info("Initializing Plastic SCM plugin");
+        LOGGER.info("===== Initializing Plastic SCM plugin VERSION " + getPluginVersion() + " =====");
         this.selector = selector;
         this.cleanup = cleanup;
         this.workingMode = workingMode;

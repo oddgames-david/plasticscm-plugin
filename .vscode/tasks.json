@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Maven: Build Plugin",
+      "type": "shell",
+      "command": "${env:USERPROFILE}\\scoop\\apps\\maven\\current\\bin\\mvn",
+      "args": ["clean", "package", "-DskipTests"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:USERPROFILE}\\scoop\\apps\\openjdk17\\current"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: Compile Only",
+      "type": "shell",
+      "command": "${env:USERPROFILE}\\scoop\\apps\\maven\\current\\bin\\mvn",
+      "args": ["compile"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:USERPROFILE}\\scoop\\apps\\openjdk17\\current"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: Verify (with tests & checks)",
+      "type": "shell",
+      "command": "${env:USERPROFILE}\\scoop\\apps\\maven\\current\\bin\\mvn",
+      "args": ["verify"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:USERPROFILE}\\scoop\\apps\\openjdk17\\current"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: Clean",
+      "type": "shell",
+      "command": "${env:USERPROFILE}\\scoop\\apps\\maven\\current\\bin\\mvn",
+      "args": ["clean"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "JAVA_HOME": "${env:USERPROFILE}\\scoop\\apps\\openjdk17\\current"
+        }
+      },
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

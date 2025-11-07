@@ -8,7 +8,7 @@
   </parent>
 
   <artifactId>plasticscm-plugin</artifactId>
-  <version>4.5-SNAPSHOT</version>
+  <version>4.5.010-SNAPSHOT</version>
   <packaging>hpi</packaging>
   <name>PlasticSCM Plugin</name>
   <description>Integrates Jenkins with Plastic SCM</description>
