@@ -40,6 +40,15 @@ public class WorkspaceManager {
             @Nonnull final TaskListener listener,
             @Nonnull final FilePath workspacePath,
             @Nonnull final CleanupMethod cleanup) throws IOException, InterruptedException {
+        return prepare(tool, listener, workspacePath, cleanup, null);
+    }
+
+    public static Workspace prepare(
+            @Nonnull final PlasticTool tool,
+            @Nonnull final TaskListener listener,
+            @Nonnull final FilePath workspacePath,
+            @Nonnull final CleanupMethod cleanup,
+            String customWorkspaceName) throws IOException, InterruptedException {
         try {
             if (!workspacePath.exists()) {
                 workspacePath.mkdirs();
@@ -48,7 +57,7 @@ public class WorkspaceManager {
             List<Workspace> workspaces = WorkspaceManager.loadWorkspaces(tool, workspacePath.getChannel());
 
             deleteOldWorkspacesIfNeeded(tool, workspacePath, cleanup, workspaces);
-            return cleanup(tool, workspacePath, cleanup, workspaces);
+            return cleanup(tool, workspacePath, cleanup, workspaces, customWorkspaceName);
         } catch (ParseException | IOException e) {
             throw AbortExceptionBuilder.build(LOGGER, listener, e);
         }
@@ -60,13 +69,25 @@ public class WorkspaceManager {
             CleanupMethod cleanup,
             List<Workspace> workspaces)
             throws IOException, InterruptedException, ParseException {
+        return cleanup(tool, workspacePath, cleanup, workspaces, null);
+    }
+
+    public static Workspace cleanup(
+            PlasticTool tool,
+            FilePath workspacePath,
+            CleanupMethod cleanup,
+            List<Workspace> workspaces,
+            String customWorkspaceName)
+            throws IOException, InterruptedException, ParseException {
         Workspace workspace = findWorkspaceByPath(workspacePath, workspaces);
 
         if (workspace != null) {
             LOGGER.fine("Using existing workspace: " + workspace.getName());
             WorkspaceManager.cleanWorkspace(tool, workspace.getPath(), cleanup);
         } else {
-            String workspaceName = WorkspaceManager.generateUniqueWorkspaceName();
+            String workspaceName = (customWorkspaceName != null && !customWorkspaceName.trim().isEmpty())
+                ? customWorkspaceName
+                : WorkspaceManager.generateUniqueWorkspaceName();
             LOGGER.fine("Creating new workspace: " + workspaceName);
             if (workspacePath.exists()) {
                 workspacePath.deleteContents();

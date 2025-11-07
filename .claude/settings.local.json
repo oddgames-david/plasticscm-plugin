@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(git log:*)",
+      "Bash(printf:*)",
+      "Bash(cat:*)",
+      "Bash(mvn:*)",
+      "Bash(mvn clean compile:*)",
+      "Bash(java -version:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -11,8 +11,11 @@ import com.codicesoftware.plugins.jenkins.tools.CmTool;
 import hudson.AbortException;
 import hudson.EnvVars;
 import hudson.Launcher;
+import hudson.model.Job;
+import hudson.model.ParameterDefinition;
 import hudson.model.ParameterValue;
 import hudson.model.ParametersAction;
+import hudson.model.ParametersDefinitionProperty;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import jenkins.model.Jenkins;
@@ -64,6 +67,58 @@ public class PlasticSCMFile extends SCMFile {
 
         ParametersAction parameters = run.getAction(ParametersAction.class);
         return parameters != null ? parameters.getParameters() : null;
+    }
+
+    @Nonnull
+    private static List<ParameterValue> getJobDefaultParameters(@Nonnull final PlasticSCMFileSystem fs) {
+        List<ParameterValue> result = new ArrayList<>();
+
+        if (!(fs.getOwner() instanceof Job)) {
+            return result;
+        }
+
+        Job<?, ?> job = (Job<?, ?>) fs.getOwner();
+        ParametersDefinitionProperty paramDefProp = job.getProperty(ParametersDefinitionProperty.class);
+
+        if (paramDefProp == null) {
+            return result;
+        }
+
+        for (ParameterDefinition paramDefinition : paramDefProp.getParameterDefinitions()) {
+            ParameterValue defaultValue = paramDefinition.getDefaultParameterValue();
+            if (defaultValue != null) {
+                result.add(defaultValue);
+            }
+        }
+
+        return result;
+    }
+
+    @Nonnull
+    private static List<ParameterValue> getParametersForScriptFetch(@Nonnull final PlasticSCMFileSystem fs) {
+        // Start with job default parameters
+        List<ParameterValue> parameters = getJobDefaultParameters(fs);
+
+        // Override with last build parameters if available
+        List<ParameterValue> lastBuildParams = getLastBuildParameters(fs);
+        if (lastBuildParams != null && !lastBuildParams.isEmpty()) {
+            // Merge parameters - last build values override defaults
+            for (ParameterValue lastBuildParam : lastBuildParams) {
+                boolean found = false;
+                for (int i = 0; i < parameters.size(); i++) {
+                    if (parameters.get(i).getName().equals(lastBuildParam.getName())) {
+                        parameters.set(i, lastBuildParam);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    parameters.add(lastBuildParam);
+                }
+            }
+        }
+
+        return parameters;
     }
 
     @Nonnull
@@ -179,7 +234,7 @@ public class PlasticSCMFile extends SCMFile {
         try {
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(),
-                getLastBuildParameters(fs),
+                getParametersForScriptFetch(fs),
                 environment);
 
             PlasticTool tool = new PlasticTool(

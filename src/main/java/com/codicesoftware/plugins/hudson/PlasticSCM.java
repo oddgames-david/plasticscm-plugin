@@ -117,8 +117,23 @@ public class PlasticSCM extends SCM {
     private final boolean pollOnController;
     private final String directory;
     private final boolean useWorkspaceSubdirectory;
+    private final String workspaceName;
 
     // endregion
+
+    // Constructor for backwards compatibility
+    public PlasticSCM(
+            String selector,
+            CleanupMethod cleanup,
+            WorkingMode workingMode,
+            @CheckForNull String credentialsId,
+            boolean useMultipleWorkspaces,
+            List<WorkspaceInfo> additionalWorkspaces,
+            boolean pollOnController,
+            String directory) {
+        this(selector, cleanup, workingMode, credentialsId, useMultipleWorkspaces,
+             additionalWorkspaces, pollOnController, directory, null);
+    }
 
     @DataBoundConstructor
     public PlasticSCM(
@@ -129,7 +144,8 @@ public class PlasticSCM extends SCM {
             boolean useMultipleWorkspaces,
             List<WorkspaceInfo> additionalWorkspaces,
             boolean pollOnController,
-            String directory) {
+            String directory,
+            String workspaceName) {
         LOGGER.info("Initializing Plastic SCM plugin");
         this.selector = selector;
         this.cleanup = cleanup;
@@ -138,8 +154,9 @@ public class PlasticSCM extends SCM {
         this.pollOnController = pollOnController;
         this.directory = directory;
         this.credentialsId = credentialsId;
+        this.workspaceName = workspaceName;
 
-        firstWorkspace = new WorkspaceInfo(this.selector, this.cleanup, this.directory);
+        firstWorkspace = new WorkspaceInfo(this.selector, this.cleanup, this.directory, this.workspaceName);
         if (additionalWorkspaces == null || !useMultipleWorkspaces) {
             this.additionalWorkspaces = null;
             return;
@@ -196,6 +213,11 @@ public class PlasticSCM extends SCM {
     @SuppressWarnings("unused")
     public boolean isPollOnController() {
         return pollOnController;
+    }
+
+    @Exported
+    public String getWorkspaceName() {
+        return workspaceName;
     }
 
     // endregion
@@ -271,7 +293,7 @@ public class PlasticSCM extends SCM {
                 buildClientConfigurationArguments(run.getParent(), resolvedSelector));
 
             Workspace plasticWorkspace = WorkspaceManager.prepare(
-                tool, listener, plasticWorkspacePath, workspaceInfo.getCleanup());
+                tool, listener, plasticWorkspacePath, workspaceInfo.getCleanup(), workspaceInfo.getWorkspaceName());
 
             WorkspaceManager.setSelector(tool, plasticWorkspace.getPath(), resolvedSelector);
 
@@ -708,11 +730,19 @@ public class PlasticSCM extends SCM {
 
         private final String directory;
 
-        @DataBoundConstructor
+        private final String workspaceName;
+
+        // Constructor for backwards compatibility
         public WorkspaceInfo(String selector, CleanupMethod cleanup, String directory) {
+            this(selector, cleanup, directory, null);
+        }
+
+        @DataBoundConstructor
+        public WorkspaceInfo(String selector, CleanupMethod cleanup, String directory, String workspaceName) {
             this.selector = selector;
             this.cleanup = cleanup;
             this.directory = directory;
+            this.workspaceName = workspaceName;
         }
 
         @Override
@@ -733,6 +763,11 @@ public class PlasticSCM extends SCM {
         @Exported
         public String getDirectory() {
             return directory;
+        }
+
+        @Exported
+        public String getWorkspaceName() {
+            return workspaceName;
         }
 
         @SuppressWarnings("unused")

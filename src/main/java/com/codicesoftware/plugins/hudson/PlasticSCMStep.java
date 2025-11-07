@@ -39,6 +39,7 @@ public class PlasticSCMStep extends SCMStep {
     private CleanupMethod cleanup = CleanupMethod.STANDARD;
 
     private String directory = "";
+    private String workspaceName = "";
 
     @DataBoundConstructor
     public PlasticSCMStep() {
@@ -134,11 +135,20 @@ public class PlasticSCMStep extends SCMStep {
         this.directory = directory;
     }
 
+    public String getWorkspaceName() {
+        return workspaceName;
+    }
+
+    @DataBoundSetter
+    public void setWorkspaceName(String workspaceName) {
+        this.workspaceName = workspaceName;
+    }
+
     @Nonnull
     @Override
     protected SCM createSCM() {
         return new PlasticSCM(
-            buildSelector(), cleanup, workingMode, credentialsId, false, null, false, directory);
+            buildSelector(), cleanup, workingMode, credentialsId, false, null, false, directory, workspaceName);
     }
 
     private String buildSelector() {
