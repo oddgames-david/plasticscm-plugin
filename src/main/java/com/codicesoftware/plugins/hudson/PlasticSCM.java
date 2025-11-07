@@ -290,6 +290,8 @@ public class PlasticSCM extends SCM {
             FilePath plasticWorkspacePath = resolveWorkspacePath(workspace, workspaceInfo);
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(), parameterValues, environment);
+            String resolvedWorkspaceName = SelectorParametersResolver.resolve(
+                workspaceInfo.getWorkspaceName(), parameterValues, environment);
 
             if (!plasticWorkspacePath.exists()) {
                 plasticWorkspacePath.mkdirs();
@@ -303,7 +305,7 @@ public class PlasticSCM extends SCM {
                 buildClientConfigurationArguments(run.getParent(), resolvedSelector));
 
             Workspace plasticWorkspace = WorkspaceManager.prepare(
-                tool, listener, plasticWorkspacePath, workspaceInfo.getCleanup(), workspaceInfo.getWorkspaceName());
+                tool, listener, plasticWorkspacePath, workspaceInfo.getCleanup(), resolvedWorkspaceName);
 
             WorkspaceManager.setSelector(tool, plasticWorkspace.getPath(), resolvedSelector);
 
