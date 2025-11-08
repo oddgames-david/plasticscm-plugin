@@ -10,6 +10,32 @@
 - Commit Jenkinsfile changes via `cm` command when necessary
 - Do NOT make changes to Jenkins configuration through any other means
 
+### Persistence and Problem-Solving Behavior
+
+**The AI assistant must follow these principles when encountering problems:**
+
+1. **Don't give up too soon:**
+   - Try multiple approaches before concluding something is impossible
+   - Investigate error messages thoroughly
+   - Check logs, documentation, and alternative solutions
+   - Persist through initial failures - many issues require 2-3 attempts to resolve
+
+2. **Ask for help when stuck:**
+   - If you've tried multiple approaches and are still stuck, ask the user for guidance
+   - Explain what you've tried and what didn't work
+   - Ask specific questions about the environment, configuration, or expected behavior
+   - The user may have context or knowledge that can unblock the situation
+
+3. **Always consult before reverting or changing direction:**
+   - NEVER automatically revert changes or abandon an approach without asking first
+   - When you encounter an error or obstacle, present options to the user:
+     - "I encountered [problem]. Would you like me to:
+       - Try approach A?
+       - Revert the recent changes?
+       - Investigate further?"
+   - Let the user decide whether to proceed, pivot, or rollback
+   - The user may prefer to debug the current approach rather than start over
+
 ## Current Version
 
 **Always check `pom.xml` for the actual current version.**
