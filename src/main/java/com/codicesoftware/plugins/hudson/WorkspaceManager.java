@@ -79,24 +79,40 @@ public class WorkspaceManager {
             List<Workspace> workspaces,
             String customWorkspaceName)
             throws IOException, InterruptedException, ParseException {
-        Workspace workspace = findWorkspaceByPath(workspacePath, workspaces);
 
         // Determine the desired workspace name
         String desiredWorkspaceName = (customWorkspaceName != null && !customWorkspaceName.trim().isEmpty())
             ? customWorkspaceName
             : null;
 
-        if (workspace != null) {
-            // Check if we need to recreate the workspace due to name mismatch
-            if (desiredWorkspaceName != null && !workspace.getName().equals(desiredWorkspaceName)) {
-                LOGGER.fine("Workspace name mismatch. Deleting existing workspace '"
-                    + workspace.getName() + "' to create new workspace '" + desiredWorkspaceName + "'");
-                deleteWorkspace(tool, workspace, workspaces);
-                workspace = null; // Force creation of new workspace below
-            } else {
-                LOGGER.fine("Using existing workspace: " + workspace.getName());
-                WorkspaceManager.cleanWorkspace(tool, workspace.getPath(), cleanup);
+        // When a custom workspace name is specified, look for it by NAME first
+        // This allows multiple jobs to share the same Plastic workspace
+        Workspace workspace = null;
+        if (desiredWorkspaceName != null) {
+            // Look for existing workspace with the custom name
+            for (Workspace ws : workspaces) {
+                if (ws.getName().equals(desiredWorkspaceName)) {
+                    workspace = ws;
+                    LOGGER.fine("Found existing workspace by name: " + desiredWorkspaceName +
+                               " at path: " + ws.getPath().getRemote());
+                    break;
+                }
             }
+        } else {
+            // No custom name, use path-based lookup
+            workspace = findWorkspaceByPath(workspacePath, workspaces);
+        }
+
+        if (workspace != null) {
+            // Workspace exists - reuse it wherever it is
+            LOGGER.fine("Using existing workspace: " + workspace.getName() +
+                       " at " + workspace.getPath().getRemote());
+            if (!isSameWorkspacePath(workspace.getPath().getRemote(), workspacePath.getRemote())) {
+                LOGGER.warning("Workspace '" + workspace.getName() + "' exists at different path than expected. " +
+                             "Using existing path: " + workspace.getPath().getRemote() +
+                             " (expected: " + workspacePath.getRemote() + ")");
+            }
+            WorkspaceManager.cleanWorkspace(tool, workspace.getPath(), cleanup);
         }
 
         if (workspace == null) {

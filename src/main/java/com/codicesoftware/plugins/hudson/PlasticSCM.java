@@ -358,6 +358,9 @@ public class PlasticSCM extends SCM {
         for (WorkspaceInfo workspaceInfo : getAllWorkspaces()) {
 
             FilePath plasticWorkspacePath = resolveWorkspacePath(workspace, workspaceInfo);
+            listener.getLogger().println("[PlasticSCM] Input workspace: " + workspace.getRemote());
+            listener.getLogger().println("[PlasticSCM] Custom workspace name: " + workspaceInfo.getWorkspaceName());
+            listener.getLogger().println("[PlasticSCM] Resolved workspace path: " + plasticWorkspacePath.getRemote());
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(), parameterValues, environment);
 
