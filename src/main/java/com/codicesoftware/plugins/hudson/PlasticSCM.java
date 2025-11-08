@@ -129,25 +129,9 @@ public class PlasticSCM extends SCM {
     private final WorkspaceInfo firstWorkspace;
 
     private final boolean pollOnController;
-    private final String directory;
     private final boolean useWorkspaceSubdirectory;
-    private final String workspaceName;
 
     // endregion
-
-    // Constructor for backwards compatibility
-    public PlasticSCM(
-            String selector,
-            CleanupMethod cleanup,
-            WorkingMode workingMode,
-            @CheckForNull String credentialsId,
-            boolean useMultipleWorkspaces,
-            List<WorkspaceInfo> additionalWorkspaces,
-            boolean pollOnController,
-            String directory) {
-        this(selector, cleanup, workingMode, credentialsId, useMultipleWorkspaces,
-             additionalWorkspaces, pollOnController, directory, null);
-    }
 
     @DataBoundConstructor
     public PlasticSCM(
@@ -157,22 +141,16 @@ public class PlasticSCM extends SCM {
             @CheckForNull String credentialsId,
             boolean useMultipleWorkspaces,
             List<WorkspaceInfo> additionalWorkspaces,
-            boolean pollOnController,
-            String directory,
-            String workspaceName) {
+            boolean pollOnController) {
         LOGGER.info("===== Initializing Plastic SCM plugin VERSION " + getPluginVersion() + " =====");
-        LOGGER.info("Constructor parameters - directory: '" + directory + "', workspaceName: '" + workspaceName + "'");
         this.selector = selector;
         this.cleanup = cleanup;
         this.workingMode = workingMode;
         this.useWorkspaceSubdirectory = useMultipleWorkspaces;
         this.pollOnController = pollOnController;
-        this.directory = directory;
         this.credentialsId = credentialsId;
-        this.workspaceName = workspaceName;
 
-        firstWorkspace = new WorkspaceInfo(this.selector, this.cleanup, this.directory, this.workspaceName);
-        LOGGER.info("Created firstWorkspace with workspaceName: '" + firstWorkspace.getWorkspaceName() + "'");
+        firstWorkspace = new WorkspaceInfo(this.selector, this.cleanup);
         if (additionalWorkspaces == null || !useMultipleWorkspaces) {
             this.additionalWorkspaces = null;
             return;
@@ -278,19 +256,9 @@ public class PlasticSCM extends SCM {
     }
 
     @Exported
-    public String getDirectory() {
-        return directory;
-    }
-
-    @Exported
     @SuppressWarnings("unused")
     public boolean isPollOnController() {
         return pollOnController;
-    }
-
-    @Exported
-    public String getWorkspaceName() {
-        return workspaceName;
     }
 
     // endregion
@@ -346,12 +314,6 @@ public class PlasticSCM extends SCM {
             @CheckForNull final File changelogFile,
             @CheckForNull final SCMRevisionState baseline) throws IOException, InterruptedException {
 
-        listener.getLogger().println("[PlasticSCM DEBUG] checkout() method called");
-        listener.getLogger().println("[PlasticSCM DEBUG] Input workspace path: " + workspace.getRemote());
-        listener.getLogger().println("[PlasticSCM DEBUG] Number of workspaces: " + getAllWorkspaces().size());
-        listener.getLogger().println("[PlasticSCM DEBUG] firstWorkspace: " + firstWorkspace);
-        listener.getLogger().println("[PlasticSCM DEBUG] firstWorkspace.workspaceName: " + (firstWorkspace != null ? firstWorkspace.getWorkspaceName() : "null"));
-
         Node node = BuildNode.getFromWorkspacePath(workspace);
 
         List<ChangeSet> changeLogItems = new ArrayList<>();
@@ -365,34 +327,30 @@ public class PlasticSCM extends SCM {
 
         for (WorkspaceInfo workspaceInfo : getAllWorkspaces()) {
 
-            FilePath plasticWorkspacePath = resolveWorkspacePath(workspace, workspaceInfo);
-            listener.getLogger().println("[PlasticSCM] Input workspace: " + workspace.getRemote());
-            listener.getLogger().println("[PlasticSCM] Custom workspace name: " + workspaceInfo.getWorkspaceName());
-            listener.getLogger().println("[PlasticSCM] Resolved workspace path: " + plasticWorkspacePath.getRemote());
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(), parameterValues, environment);
 
-            if (!plasticWorkspacePath.exists()) {
-                plasticWorkspacePath.mkdirs();
+            if (!workspace.exists()) {
+                workspace.mkdirs();
             }
 
             PlasticTool tool = new PlasticTool(
                 CmTool.get(node, run.getEnvironment(listener), listener),
                 launcher,
                 listener,
-                plasticWorkspacePath,
+                workspace,
                 buildClientConfigurationArguments(run.getParent(), resolvedSelector));
 
             Workspace plasticWorkspace = WorkspaceManager.prepare(
-                tool, listener, plasticWorkspacePath, workspaceInfo.getCleanup(), workspaceInfo.getWorkspaceName());
+                tool, listener, workspace, workspaceInfo.getCleanup());
 
             WorkspaceManager.setSelector(tool, plasticWorkspace.getPath(), resolvedSelector);
 
-            ChangeSet cset = ChangesetDetails.forWorkspace(tool, plasticWorkspacePath, listener);
+            ChangeSet cset = ChangesetDetails.forWorkspace(tool, workspace, listener);
 
-            ChangeSet previousCset = retrieveLastBuiltChangeset(tool, run,  plasticWorkspacePath, cset);
+            ChangeSet previousCset = retrieveLastBuiltChangeset(tool, run, workspace, cset);
             changeLogItems.addAll(retrieveMultipleChangesetDetails(
-                tool, plasticWorkspacePath, listener, previousCset, cset));
+                tool, workspace, listener, previousCset, cset));
 
             BuildData buildData = new BuildData(plasticWorkspace, cset);
             List<BuildData> actions = run.getActions(BuildData.class);
@@ -409,16 +367,6 @@ public class PlasticSCM extends SCM {
 
     @Override
     public void buildEnvironment(@Nonnull Run<?, ?> build, @Nonnull Map<String, String> env) {
-        LOGGER.info("[buildEnvironment] Called - workspaceName='" + workspaceName + "'");
-
-        // Add custom workspace name as environment variable if configured
-        if (Util.fixEmpty(workspaceName) != null) {
-            env.put("PLASTICSCM_WORKSPACE_NAME", workspaceName);
-            LOGGER.info("Added PLASTICSCM_WORKSPACE_NAME=" + workspaceName + " to environment");
-        } else {
-            LOGGER.warning("workspaceName is null or empty, not adding to environment");
-        }
-
         int index = 1;
         for (BuildData buildData : build.getActions(BuildData.class)) {
             ChangeSet cset = buildData.getChangeset();
@@ -467,14 +415,13 @@ public class PlasticSCM extends SCM {
         EnvVars environment = lastBuild.getEnvironment(listener);
 
         for (WorkspaceInfo workspaceInfo : getAllWorkspaces()) {
-            FilePath plasticWorkspacePath = resolveWorkspacePath(workspace, workspaceInfo);
             String resolvedSelector = SelectorParametersResolver.resolve(
                 workspaceInfo.getSelector(), parameters, environment);
 
             boolean hasChanges = hasChanges(
                 project,
                     launcher,
-                    plasticWorkspacePath,
+                    workspace,
                     listener,
                     lastBuild.getTimestamp(),
                 resolvedSelector);
@@ -521,49 +468,6 @@ public class PlasticSCM extends SCM {
     // endregion
 
     // region Private methods
-
-    private static FilePath resolveWorkspacePath(
-            FilePath jenkinsWorkspacePath,
-            WorkspaceInfo workspaceInfo) {
-        if (jenkinsWorkspacePath == null || workspaceInfo == null) {
-            return null;
-        }
-
-        // Use custom workspace name to create path relative to node's workspace root
-        String customWorkspaceName = workspaceInfo.getWorkspaceName();
-        LOGGER.info("Resolving workspace path - Input path: " + jenkinsWorkspacePath.getRemote() +
-                   ", Custom workspace name: " + customWorkspaceName);
-
-        if (Util.fixEmpty(customWorkspaceName) != null) {
-            // Get the node's workspace root directory by finding the "workspace" directory
-            // This handles cases where Pipeline uses nested workspaces
-            String currentPath = jenkinsWorkspacePath.getRemote();
-            String workspaceRoot = null;
-
-            // Look for "/workspace/" in the path
-            int workspaceIndex = currentPath.lastIndexOf("/workspace/");
-            if (workspaceIndex > 0) {
-                workspaceRoot = currentPath.substring(0, workspaceIndex + "/workspace".length());
-            } else {
-                // Fallback to parent directory
-                FilePath parent = jenkinsWorkspacePath.getParent();
-                if (parent != null) {
-                    workspaceRoot = parent.getRemote();
-                }
-            }
-
-            if (workspaceRoot != null) {
-                FilePath resolvedPath = new FilePath(jenkinsWorkspacePath.getChannel(),
-                                                    workspaceRoot + "/" + customWorkspaceName);
-                LOGGER.info("Resolved workspace path: " + resolvedPath.getRemote());
-                return resolvedPath;
-            }
-        }
-
-        // Fallback to Jenkins workspace path if no custom name is provided
-        LOGGER.info("Using default workspace path: " + jenkinsWorkspacePath.getRemote());
-        return jenkinsWorkspacePath;
-    }
 
     /**
      * Finds changeset of the last completed build for the same branch as the given changeset.
@@ -795,17 +699,6 @@ public class PlasticSCM extends SCM {
             return FormChecker.doCheckSelector(value);
         }
 
-        @POST
-        public static FormValidation doCheckDirectory(
-                @QueryParameter String value,
-                @QueryParameter boolean useMultipleWorkspaces,
-                @AncestorInPath Item item) {
-            if (Util.fixEmpty(value) == null && !useMultipleWorkspaces) {
-                return FormValidation.ok();
-            }
-            return FormChecker.doCheckDirectory(value, item);
-        }
-
         public static String getDefaultSelector() {
             return SelectorTemplates.DEFAULT;
         }
@@ -843,21 +736,10 @@ public class PlasticSCM extends SCM {
 
         private final CleanupMethod cleanup;
 
-        private final String directory;
-
-        private final String workspaceName;
-
-        // Constructor for backwards compatibility
-        public WorkspaceInfo(String selector, CleanupMethod cleanup, String directory) {
-            this(selector, cleanup, directory, null);
-        }
-
         @DataBoundConstructor
-        public WorkspaceInfo(String selector, CleanupMethod cleanup, String directory, String workspaceName) {
+        public WorkspaceInfo(String selector, CleanupMethod cleanup) {
             this.selector = selector;
             this.cleanup = cleanup;
-            this.directory = directory;
-            this.workspaceName = workspaceName;
         }
 
         @Override
@@ -875,16 +757,6 @@ public class PlasticSCM extends SCM {
             return cleanup;
         }
 
-        @Exported
-        public String getDirectory() {
-            return directory;
-        }
-
-        @Exported
-        public String getWorkspaceName() {
-            return workspaceName;
-        }
-
         @SuppressWarnings("unused")
         @Extension
         public static class DescriptorImpl extends Descriptor<WorkspaceInfo> {
@@ -893,11 +765,6 @@ public class PlasticSCM extends SCM {
             @POST
             public static FormValidation doCheckSelector(@QueryParameter String value) {
                 return FormChecker.doCheckSelector(value);
-            }
-
-            @POST
-            public static FormValidation doCheckDirectory(@QueryParameter String value, @AncestorInPath Item item) {
-                return FormChecker.doCheckDirectory(value, item);
             }
 
             public static String getDefaultSelector() {

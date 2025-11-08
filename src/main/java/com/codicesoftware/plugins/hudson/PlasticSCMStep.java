@@ -38,9 +38,6 @@ public class PlasticSCMStep extends SCMStep {
     private String credentialsId = null;
     private CleanupMethod cleanup = CleanupMethod.STANDARD;
 
-    private String directory = "";
-    private String workspaceName = "";
-
     @DataBoundConstructor
     public PlasticSCMStep() {
     }
@@ -126,29 +123,11 @@ public class PlasticSCMStep extends SCMStep {
         this.cleanup = cleanup;
     }
 
-    public String getDirectory() {
-        return directory;
-    }
-
-    @DataBoundSetter
-    public void setDirectory(String directory) {
-        this.directory = directory;
-    }
-
-    public String getWorkspaceName() {
-        return workspaceName;
-    }
-
-    @DataBoundSetter
-    public void setWorkspaceName(String workspaceName) {
-        this.workspaceName = workspaceName;
-    }
-
     @Nonnull
     @Override
     protected SCM createSCM() {
         return new PlasticSCM(
-            buildSelector(), cleanup, workingMode, credentialsId, false, null, false, directory, workspaceName);
+            buildSelector(), cleanup, workingMode, credentialsId, false, null, false);
     }
 
     private String buildSelector() {
@@ -195,14 +174,6 @@ public class PlasticSCMStep extends SCMStep {
         @POST
         public FormValidation doCheckServer(@QueryParameter String value) {
             return FormChecker.doCheckServer(value);
-        }
-
-        @POST
-        public static FormValidation doCheckDirectory(@QueryParameter String value, @AncestorInPath Item item) {
-            if (Util.fixEmpty(value) == null) {
-                return FormValidation.ok();
-            }
-            return FormChecker.doCheckDirectory(value, item);
         }
 
         @POST
