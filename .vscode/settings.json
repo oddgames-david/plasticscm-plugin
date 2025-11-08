@@ -1,4 +1,6 @@
 {
     "java.configuration.updateBuildConfiguration": "disabled",
-    "claudeCode.allowDangerouslySkipPermissions": true
+    "claudeCode.allowDangerouslySkipPermissions": true,
+    "claudeCode.initialPermissionMode": "bypassPermissions",
+    "java.compile.nullAnalysis.mode": "disabled"
 }

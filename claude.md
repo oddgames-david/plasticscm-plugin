@@ -72,15 +72,60 @@ export JENKINS_API_TOKEN="your-api-token"    # Your Jenkins API token
 
 ## Installation in Jenkins
 
-### Development Workflow (Recommended)
+### Development Workflow (Recommended) - Jenkins CLI Method
 
-**Option A: Use SNAPSHOT Versioning**
-1. Change version in `pom.xml` to `4.5-SNAPSHOT`
-2. Build plugin
-3. Upload via Jenkins UI - it will overwrite automatically
-4. Restart Jenkins
+**Prerequisites:**
+- Jenkins CLI jar file: `curl -O "$JENKINS_URL/jnlpJars/jenkins-cli.jar"`
+- Jenkins credentials configured in `.env` file
 
-**Option B: Use Update Script**
+**Method 1: Upload via Jenkins CLI (Works for Remote Jenkins)**
+```bash
+# Download Jenkins CLI if needed
+if [ ! -f jenkins-cli.jar ]; then
+  curl -O "$JENKINS_URL/jnlpJars/jenkins-cli.jar"
+fi
+
+# Deploy plugin via stdin and restart Jenkins
+cat target/plasticscm-plugin.hpi | java -jar jenkins-cli.jar \
+  -s "$JENKINS_URL" \
+  -auth "$JENKINS_USER:$JENKINS_API_TOKEN" \
+  install-plugin = -restart
+
+# Wait for restart
+sleep 25
+
+# Verify installation
+java -jar jenkins-cli.jar -s "$JENKINS_URL" -auth "$JENKINS_USER:$JENKINS_API_TOKEN" \
+  list-plugins | grep plastic
+```
+
+**Method 2: Local File Copy (Local Jenkins Only)**
+```bash
+# 1. Remove old plugin files (critical to avoid caching issues)
+rm -rf $JENKINS_HOME/plugins/plasticscm-plugin*
+
+# 2. Copy new plugin
+cp target/plasticscm-plugin.hpi $JENKINS_HOME/plugins/
+
+# 3. Restart Jenkins safely
+java -jar jenkins-cli.jar -s "$JENKINS_URL" -auth "$JENKINS_USER:$JENKINS_API_TOKEN" safe-restart
+
+# 4. Wait for restart (20-30 seconds)
+
+# 5. Verify installation
+java -jar jenkins-cli.jar -s "$JENKINS_URL" -auth "$JENKINS_USER:$JENKINS_API_TOKEN" list-plugins | grep plastic
+```
+
+**Automated Testing:**
+Use the `/test` command which automatically:
+- Downloads Jenkins CLI if needed
+- Deploys plugin via Jenkins CLI
+- Triggers test job
+- Analyzes results
+
+### Alternative Methods
+
+**Option A: Use Update Script**
 ```bash
 # First, update JENKINS_HOME path in update-plugin.sh
 ./update-plugin.sh
@@ -91,14 +136,7 @@ The script will:
 - Install new plugin
 - Remind you to restart Jenkins
 
-### Clean Install (First Time)
-
-**Method 1: Manual Copy**
-1. Stop Jenkins
-2. Copy `target/plasticscm-plugin.hpi` to `JENKINS_HOME/plugins/`
-3. Start Jenkins
-
-**Method 2: Web UI Upload**
+**Option B: Web UI Upload**
 1. Go to Jenkins → Manage Jenkins → Plugins → Advanced
 2. Upload `target/plasticscm-plugin.hpi`
 3. Restart Jenkins when prompted
@@ -110,17 +148,19 @@ Jenkins caches plugins aggressively. When uploading the same version number:
 - Expanded plugin directory isn't cleared
 - Jenkins uses cached version
 
-Solutions:
-- Use SNAPSHOT versioning for development
-- Use update script to properly clean old files
-- Increment version number for each build (current approach)
+**Critical:** Always remove the old plugin files (`rm -rf $JENKINS_HOME/plugins/plasticscm-plugin*`) before deploying a new version, even if you've incremented the version number.
 
 ## Features Added
 
 ### 1. Parameter Resolution for Pipeline SCM
-- Resolves `${BRANCH}` and other parameters BEFORE fetching Jenkinsfile
+- Resolves parameters BEFORE fetching Jenkinsfile
 - Works in "Pipeline script from SCM" configurations
 - Uses job default parameters + last build parameters
+- **Supported parameter formats:**
+  - `${BRANCH}` - Jenkins standard format (e.g., `${BRANCH}`, `${JOB_NAME}`)
+  - `{BRANCH}` - Simple curly braces (e.g., `{BRANCH}`, `{BUILD_NUMBER}`)
+  - `%BRANCH%` - Windows/legacy format (e.g., `%BRANCH%`, `%WORKSPACE%`)
+- All three formats can be used interchangeably in selectors and workspace names
 
 ### 2. Custom Workspace Names
 - New field: "Workspace name" in both Pipeline and Freestyle configurations
@@ -182,6 +222,7 @@ export JAVA_HOME="/c/Users/David/scoop/apps/openjdk17/current"
 
 ### Core Changes
 - `PlasticSCMFile.java` - Parameter resolution for Jenkinsfile fetch
+- `SelectorParametersResolver.java` - Multi-format parameter resolution (${}, {}, %%)
 - `PlasticSCM.java` - Custom workspace name field
 - `PlasticSCMStep.java` - Custom workspace name for pipeline
 - `WorkspaceManager.java` - Accept custom workspace name

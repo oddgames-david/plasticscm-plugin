@@ -81,12 +81,27 @@ public class WorkspaceManager {
             throws IOException, InterruptedException, ParseException {
         Workspace workspace = findWorkspaceByPath(workspacePath, workspaces);
 
+        // Determine the desired workspace name
+        String desiredWorkspaceName = (customWorkspaceName != null && !customWorkspaceName.trim().isEmpty())
+            ? customWorkspaceName
+            : null;
+
         if (workspace != null) {
-            LOGGER.fine("Using existing workspace: " + workspace.getName());
-            WorkspaceManager.cleanWorkspace(tool, workspace.getPath(), cleanup);
-        } else {
-            String workspaceName = (customWorkspaceName != null && !customWorkspaceName.trim().isEmpty())
-                ? customWorkspaceName
+            // Check if we need to recreate the workspace due to name mismatch
+            if (desiredWorkspaceName != null && !workspace.getName().equals(desiredWorkspaceName)) {
+                LOGGER.fine("Workspace name mismatch. Deleting existing workspace '"
+                    + workspace.getName() + "' to create new workspace '" + desiredWorkspaceName + "'");
+                deleteWorkspace(tool, workspace, workspaces);
+                workspace = null; // Force creation of new workspace below
+            } else {
+                LOGGER.fine("Using existing workspace: " + workspace.getName());
+                WorkspaceManager.cleanWorkspace(tool, workspace.getPath(), cleanup);
+            }
+        }
+
+        if (workspace == null) {
+            String workspaceName = (desiredWorkspaceName != null)
+                ? desiredWorkspaceName
                 : WorkspaceManager.generateUniqueWorkspaceName();
             LOGGER.fine("Creating new workspace: " + workspaceName);
             if (workspacePath.exists()) {

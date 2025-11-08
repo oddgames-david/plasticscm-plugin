@@ -108,7 +108,12 @@ public class PlasticSCMFileSystem extends SCMFileSystem {
 
         @Override
         public boolean supports(SCM source) {
-            return isPlasticSCM(source);
+            boolean result = isPlasticSCM(source);
+            LOGGER.info("===== PlasticSCMFileSystem.Builder.supports(SCM) called =====");
+            LOGGER.info("SCM type: " + (source != null ? source.getClass().getName() : "null"));
+            LOGGER.info("Is PlasticSCM: " + result);
+            LOGGER.info("===========================================================");
+            return result;
         }
 
         @Override

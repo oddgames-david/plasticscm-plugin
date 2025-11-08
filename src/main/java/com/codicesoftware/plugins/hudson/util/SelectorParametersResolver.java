@@ -31,7 +31,15 @@ public class SelectorParametersResolver {
     static String resolveLegacyFormat(String text, Map<String, String> parametersMap) {
         String result = text;
         for (Map.Entry<String, String> entry : parametersMap.entrySet()) {
-            result = result.replaceAll("%" + entry.getKey() + "%", entry.getValue());
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            // Replace %PARAM% format
+            result = result.replaceAll("%" + key + "%", value);
+
+            // Replace {PARAM} format (but not ${PARAM} which is handled by Util.replaceMacro)
+            // Use negative lookbehind to avoid matching ${PARAM}
+            result = result.replaceAll("(?<!\\$)\\{" + key + "\\}", value);
         }
         return result;
     }

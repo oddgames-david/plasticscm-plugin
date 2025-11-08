@@ -1,11 +1,9 @@
 package com.codicesoftware.plugins.jenkins;
 
-import com.codicesoftware.plugins.hudson.PlasticSCM;
 import com.codicesoftware.plugins.hudson.PlasticTool;
 import com.codicesoftware.plugins.hudson.commands.CommandRunner;
 import com.codicesoftware.plugins.hudson.commands.GetSelectorSpecCommand;
 import com.codicesoftware.plugins.hudson.model.WorkspaceInfo;
-import com.codicesoftware.plugins.hudson.util.SelectorParametersResolver;
 import com.codicesoftware.plugins.hudson.util.StringUtil;
 import com.codicesoftware.plugins.jenkins.tools.CmTool;
 import hudson.AbortException;
@@ -211,7 +209,6 @@ public class PlasticSCMFile extends SCMFile {
     @Nonnull
     @Override
     public InputStream content() throws IOException, InterruptedException {
-        PlasticSCM.WorkspaceInfo workspaceInfo = fs.getSCM().getFirstWorkspace();
         String serverFile = getPath();
 
         if (fs.getSCM().isUseMultipleWorkspaces()) {
@@ -234,32 +231,15 @@ public class PlasticSCMFile extends SCMFile {
         }
 
         try {
-            List<ParameterValue> parameters = getParametersForScriptFetch(fs);
+            // IMPORTANT: Use getResolvedSelector() which resolves parameters at the earliest point
+            String resolvedSelector = fs.getSCM().getResolvedSelector(fs.getOwner());
 
-            // Log parameter resolution
+            // Log the resolution for debugging
             LOGGER.info("=== Plastic SCM Selector Resolution Debug ===");
-            LOGGER.info("Original selector: " + workspaceInfo.getSelector());
-            LOGGER.info("Parameters count: " + parameters.size());
-            for (ParameterValue param : parameters) {
-                listener.getLogger().println("Parameter " + param.getName() + " = " + param.getValue());
-                LOGGER.info("  Parameter: " + param.getName() + " = " + param.getValue());
-            }
-
-            LOGGER.info("Environment variables relevant to BRANCH:");
-            for (String key : environment.keySet()) {
-                if (key.contains("BRANCH") || key.contains("branch")) {
-                    LOGGER.info("  Env: " + key + " = " + environment.get(key));
-                }
-            }
-
-            String resolvedSelector = SelectorParametersResolver.resolve(
-                workspaceInfo.getSelector(),
-                parameters,
-                environment);
-
-            listener.getLogger().println("Resolved Plastic SCM selector");
             LOGGER.info("Resolved selector: " + resolvedSelector);
             LOGGER.info("=== End Selector Resolution Debug ===");
+
+            listener.getLogger().println("Using Plastic SCM selector (parameters resolved): " + resolvedSelector);
 
             PlasticTool tool = new PlasticTool(
                 CmTool.get(Jenkins.get(), environment, listener),

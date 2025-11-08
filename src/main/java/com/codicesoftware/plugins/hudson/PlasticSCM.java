@@ -116,6 +116,10 @@ public class PlasticSCM extends SCM {
 
     private final String selector;
 
+    // Cached resolved selector for display purposes (e.g., getKey())
+    // This is set when getResolvedSelector() is called and improves error messages
+    private transient String cachedResolvedSelector = null;
+
     private final CleanupMethod cleanup;
     private final WorkingMode workingMode;
     @CheckForNull
@@ -176,9 +180,66 @@ public class PlasticSCM extends SCM {
 
     // region Bean getters & setters
 
+    /**
+     * Returns the unresolved selector template.
+     * This is needed for serialization and backward compatibility.
+     * For resolved selectors with parameters, use getSelector(Item).
+     */
     @Exported
+    @Nonnull
     public String getSelector() {
         return selector;
+    }
+
+    /**
+     * Returns the selector with parameters resolved using job default parameters.
+     * Parameters like ${BRANCH} will be replaced with their default values from the job configuration.
+     * This should be used when actually using the selector for SCM operations.
+     * @param owner The Jenkins job/item that owns this SCM
+     * @return Selector with ${PARAM} placeholders resolved
+     */
+    @Nonnull
+    public String getResolvedSelector(@CheckForNull Item owner) {
+        if (owner == null) {
+            LOGGER.fine("getResolvedSelector() called without Item context - returning unresolved selector");
+            return selector;
+        }
+
+        List<ParameterValue> parameters = getDefaultParameterValues(owner);
+        if (parameters == null || parameters.isEmpty()) {
+            return selector;
+        }
+
+        EnvVars environment = new EnvVars(EnvVars.masterEnvVars);
+        String resolved = SelectorParametersResolver.resolve(selector, parameters, environment);
+
+        // Cache the resolved selector for use in getKey() and error messages
+        this.cachedResolvedSelector = resolved;
+
+        LOGGER.info("Selector resolved: '" + selector + "' -> '" + resolved + "'");
+        return resolved;
+    }
+
+    @Nonnull
+    private static List<ParameterValue> getDefaultParameterValues(@CheckForNull Item item) {
+        if (!(item instanceof Job)) {
+            return Collections.emptyList();
+        }
+
+        Job<?, ?> job = (Job<?, ?>) item;
+        ParametersDefinitionProperty paramDefProp = job.getProperty(ParametersDefinitionProperty.class);
+        if (paramDefProp == null) {
+            return Collections.emptyList();
+        }
+
+        List<ParameterValue> result = new ArrayList<>();
+        for (ParameterDefinition paramDefinition : paramDefProp.getParameterDefinitions()) {
+            ParameterValue defaultValue = paramDefinition.getDefaultParameterValue();
+            if (defaultValue != null) {
+                result.add(defaultValue);
+            }
+        }
+        return result;
     }
 
     @Exported
@@ -236,14 +297,23 @@ public class PlasticSCM extends SCM {
 
     /**
      * {@inheritDoc}
+     * Returns a display string for this SCM configuration.
+     * Uses cached resolved selector if available to show actual parameter values in error messages.
      */
     @Override
     @Nonnull
     public String getKey() {
         StringBuilder builder = new StringBuilder("Plastic SCM");
+
+        // Use cached resolved selector if available (shows actual branch instead of ${BRANCH})
+        // Falls back to template selector if not yet resolved
+        String displaySelector = (cachedResolvedSelector != null) ? cachedResolvedSelector : selector;
+
         for (WorkspaceInfo workspace : getAllWorkspaces()) {
             builder.append(" ");
-            builder.append(Util.fixNull(workspace.getSelector()).replaceAll("\\s+", " "));
+            // For firstWorkspace, use our resolved selector; for additional workspaces, use their own
+            String workspaceSelector = (workspace == firstWorkspace) ? displaySelector : workspace.getSelector();
+            builder.append(Util.fixNull(workspaceSelector).replaceAll("\\s+", " "));
         }
         return builder.toString();
     }
@@ -370,7 +440,7 @@ public class PlasticSCM extends SCM {
             return BUILD_NOW;
         }
 
-        List<ParameterValue> parameters = getDefaultParameterValues(project);
+        List<ParameterValue> parameters = getDefaultParameterValues((Item) project);
         Run<?, ?> lastBuild = project.getLastBuild();
 
         EnvVars environment = lastBuild.getEnvironment(listener);
@@ -592,22 +662,6 @@ public class PlasticSCM extends SCM {
         }
     }
 
-    private static List<ParameterValue> getDefaultParameterValues(Job<?, ?> project) {
-        ParametersDefinitionProperty paramDefProp = project.getProperty(ParametersDefinitionProperty.class);
-        if (paramDefProp == null) {
-            return null;
-        }
-
-        ArrayList<ParameterValue> result = new ArrayList<>();
-        for (ParameterDefinition paramDefinition : paramDefProp.getParameterDefinitions()) {
-            ParameterValue defaultValue = paramDefinition.getDefaultParameterValue();
-
-            if (defaultValue != null) {
-                result.add(defaultValue);
-            }
-        }
-        return result;
-    }
 
     @CheckForNull
     private static String getBranchFromSelector(@CheckForNull String selector) {

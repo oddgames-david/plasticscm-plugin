@@ -1,0 +1,4 @@
+repository "mock_plastic_scm_plugin@oddgames_external@cloud"
+  path "/"
+    br "/main"
+    co "/main"

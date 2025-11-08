@@ -1,6 +1,10 @@
 target/
 work/
 
+# Environment files
+.env
+jenkins-cli.jar
+
 # Eclipse
 .classpath
 .project
