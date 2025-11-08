@@ -507,11 +507,41 @@ public class PlasticSCM extends SCM {
         if (jenkinsWorkspacePath == null || workspaceInfo == null) {
             return null;
         }
-        String subdirectory = workspaceInfo.getDirectory();
-        if (Util.fixEmpty(subdirectory) == null) {
-            return jenkinsWorkspacePath;
+
+        // Use custom workspace name to create path relative to node's workspace root
+        String customWorkspaceName = workspaceInfo.getWorkspaceName();
+        LOGGER.info("Resolving workspace path - Input path: " + jenkinsWorkspacePath.getRemote() +
+                   ", Custom workspace name: " + customWorkspaceName);
+
+        if (Util.fixEmpty(customWorkspaceName) != null) {
+            // Get the node's workspace root directory by finding the "workspace" directory
+            // This handles cases where Pipeline uses nested workspaces
+            String currentPath = jenkinsWorkspacePath.getRemote();
+            String workspaceRoot = null;
+
+            // Look for "/workspace/" in the path
+            int workspaceIndex = currentPath.lastIndexOf("/workspace/");
+            if (workspaceIndex > 0) {
+                workspaceRoot = currentPath.substring(0, workspaceIndex + "/workspace".length());
+            } else {
+                // Fallback to parent directory
+                FilePath parent = jenkinsWorkspacePath.getParent();
+                if (parent != null) {
+                    workspaceRoot = parent.getRemote();
+                }
+            }
+
+            if (workspaceRoot != null) {
+                FilePath resolvedPath = new FilePath(jenkinsWorkspacePath.getChannel(),
+                                                    workspaceRoot + "/" + customWorkspaceName);
+                LOGGER.info("Resolved workspace path: " + resolvedPath.getRemote());
+                return resolvedPath;
+            }
         }
-        return new FilePath(jenkinsWorkspacePath, workspaceInfo.getDirectory());
+
+        // Fallback to Jenkins workspace path if no custom name is provided
+        LOGGER.info("Using default workspace path: " + jenkinsWorkspacePath.getRemote());
+        return jenkinsWorkspacePath;
     }
 
     /**

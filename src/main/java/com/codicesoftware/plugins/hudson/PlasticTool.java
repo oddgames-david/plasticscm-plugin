@@ -211,12 +211,13 @@ public class PlasticTool {
             executionPath = workspace;
         }
         ByteArrayOutputStream stdoutStream = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderrStream = new ByteArrayOutputStream();
 
-        // Don't capture stderr at all on Windows - causes handle issues
+        // Capture both stdout and stderr
         Launcher.ProcStarter procL = launcher.launch()
             .cmds(args)
             .stdout(stdoutStream)
-            // .stderr() - let stderr go to parent process without capturing
+            .stderr(stderrStream)
             .pwd(executionPath);
 
         if (tool.isUseInvariantCulture()) {
@@ -228,18 +229,39 @@ public class PlasticTool {
         Proc proc = procL.start();
         int exitCode = proc.join();
 
+        // Close streams AFTER process completes to avoid handle issues
         stdoutStream.close();
+        stderrStream.close();
 
         if (exitCode == 0) {
             LOGGER.fine("Command succeeded: " + args);
             return new InputStreamReader(new ByteArrayInputStream(stdoutStream.toByteArray()), StandardCharsets.UTF_8);
         } else {
             String stdoutOutput = stdoutStream.toString(StandardCharsets.UTF_8.name());
+            String stderrOutput = stderrStream.toString(StandardCharsets.UTF_8.name());
+
+            StringBuilder errorMsg = new StringBuilder();
+            errorMsg.append("Command failed with exit code ").append(exitCode).append(": ").append(args);
+
             if (!stdoutOutput.isEmpty()) {
-                LOGGER.warning("Command failed: " + args + "\nOutput: " + stdoutOutput);
-            } else {
-                LOGGER.warning("Command failed with exit code " + exitCode + ": " + args);
+                errorMsg.append("\nStdout: ").append(stdoutOutput);
+                // Always print stdout from failed commands to console
+                if (listener != null) {
+                    listener.getLogger().println("[STDOUT] " + stdoutOutput);
+                }
             }
+            if (!stderrOutput.isEmpty()) {
+                errorMsg.append("\nStderr: ").append(stderrOutput);
+                // Always print stderr from failed commands to console
+                if (listener != null) {
+                    listener.getLogger().println("[STDERR] " + stderrOutput);
+                }
+            } else if (listener != null) {
+                // If no stderr but command failed, print that too
+                listener.getLogger().println("[ERROR] Command failed with exit code " + exitCode + " (no stderr output)");
+            }
+
+            LOGGER.warning(errorMsg.toString());
             return null;
         }
     }

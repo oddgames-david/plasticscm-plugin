@@ -25,10 +25,6 @@
     <f:textbox default="${descriptor.defaultServer}" checkMethod="post" />
   </f:entry>
 
-  <f:entry field="directory" title="${%Directory}" help="/plugin/plasticscm-plugin/directory.html">
-    <f:textbox checkMethod="post" />
-  </f:entry>
-
   <f:entry field="workspaceName" title="${%Workspace name}" help="/plugin/plasticscm-plugin/workspaceName.html">
     <f:textbox />
   </f:entry>
