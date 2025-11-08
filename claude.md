@@ -1,5 +1,15 @@
 # Build Environment & Process
 
+## Important Constraints for AI Assistant
+
+**When working with this project, the AI assistant must adhere to the following rules:**
+- Only communicate with Jenkins via:
+  - Jenkins REST API
+  - jenkins-cli.jar commands
+- Only edit the Jenkinsfile located at `plastic/Jenkinsfile` within this workspace
+- Commit Jenkinsfile changes via `cm` command when necessary
+- Do NOT make changes to Jenkins configuration through any other means
+
 ## Current Version
 
 **Always check `pom.xml` for the actual current version.**
@@ -164,8 +174,13 @@ Jenkins caches plugins aggressively. When uploading the same version number:
 
 ### 2. Custom Workspace Names
 - New field: "Workspace name" in both Pipeline and Freestyle configurations
+- Workspace is created relative to the Jenkins node's workspace root directory
 - Allows multiple jobs to share same Plastic SCM workspace
 - Supports parameter expansion (e.g., `${JOB_NAME}`)
+- **IMPORTANT:** The "Directory" field has been deprecated and removed from the UI
+  - Workspaces are now created at: `<node_workspace_root>/<custom_workspace_name>`
+  - Example: `/Users/david/.jenkins/workspace/my_custom_workspace`
+  - Do NOT use `customWorkspace` directive in Jenkinsfile - the plugin handles workspace location automatically
 
 ### 3. Hot-reload Support
 - Fixed `CmTool.onLoaded()` to handle hot-reload gracefully
@@ -217,6 +232,45 @@ export JAVA_HOME="/c/Users/David/scoop/apps/openjdk17/current"
 
 ### Issue: Jenkins cache corruption
 **Solution**: Stop Jenkins, delete `JENKINS_HOME/war/` and `JENKINS_HOME/work/`, restart
+
+### Issue: Pipeline using wrong workspace location
+**Symptom**: Build fails with workspace creation errors like:
+```
+The cm command '.../cm workspace create my_workspace /wrong/path' failed after 3 retries
+```
+
+**Solution**:
+1. Check that the Jenkinsfile in your Plastic SCM repository does NOT contain:
+   - `customWorkspace` directive in options block
+   - `ws` step before the checkout
+2. Remove the deprecated `<directory>` field from job configuration
+3. Set the "Workspace name" field in the Jenkins job SCM configuration
+4. The plugin will automatically create the workspace at: `<node_workspace_root>/<workspace_name>`
+
+**Example of INCORRECT Jenkinsfile:**
+```groovy
+pipeline {
+    agent any
+    options {
+        customWorkspace "workspace/my_custom_path"  // DO NOT USE
+    }
+}
+```
+
+**Example of CORRECT Jenkinsfile:**
+```groovy
+pipeline {
+    agent any
+    // No customWorkspace - let the plugin handle it
+    stages {
+        stage('Build') {
+            steps {
+                // Your build steps
+            }
+        }
+    }
+}
+```
 
 ## Files Modified
 

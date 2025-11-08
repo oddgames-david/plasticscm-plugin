@@ -161,6 +161,7 @@ public class PlasticSCM extends SCM {
             String directory,
             String workspaceName) {
         LOGGER.info("===== Initializing Plastic SCM plugin VERSION " + getPluginVersion() + " =====");
+        LOGGER.info("Constructor parameters - directory: '" + directory + "', workspaceName: '" + workspaceName + "'");
         this.selector = selector;
         this.cleanup = cleanup;
         this.workingMode = workingMode;
@@ -171,6 +172,7 @@ public class PlasticSCM extends SCM {
         this.workspaceName = workspaceName;
 
         firstWorkspace = new WorkspaceInfo(this.selector, this.cleanup, this.directory, this.workspaceName);
+        LOGGER.info("Created firstWorkspace with workspaceName: '" + firstWorkspace.getWorkspaceName() + "'");
         if (additionalWorkspaces == null || !useMultipleWorkspaces) {
             this.additionalWorkspaces = null;
             return;
@@ -344,6 +346,12 @@ public class PlasticSCM extends SCM {
             @CheckForNull final File changelogFile,
             @CheckForNull final SCMRevisionState baseline) throws IOException, InterruptedException {
 
+        listener.getLogger().println("[PlasticSCM DEBUG] checkout() method called");
+        listener.getLogger().println("[PlasticSCM DEBUG] Input workspace path: " + workspace.getRemote());
+        listener.getLogger().println("[PlasticSCM DEBUG] Number of workspaces: " + getAllWorkspaces().size());
+        listener.getLogger().println("[PlasticSCM DEBUG] firstWorkspace: " + firstWorkspace);
+        listener.getLogger().println("[PlasticSCM DEBUG] firstWorkspace.workspaceName: " + (firstWorkspace != null ? firstWorkspace.getWorkspaceName() : "null"));
+
         Node node = BuildNode.getFromWorkspacePath(workspace);
 
         List<ChangeSet> changeLogItems = new ArrayList<>();
@@ -401,6 +409,16 @@ public class PlasticSCM extends SCM {
 
     @Override
     public void buildEnvironment(@Nonnull Run<?, ?> build, @Nonnull Map<String, String> env) {
+        LOGGER.info("[buildEnvironment] Called - workspaceName='" + workspaceName + "'");
+
+        // Add custom workspace name as environment variable if configured
+        if (Util.fixEmpty(workspaceName) != null) {
+            env.put("PLASTICSCM_WORKSPACE_NAME", workspaceName);
+            LOGGER.info("Added PLASTICSCM_WORKSPACE_NAME=" + workspaceName + " to environment");
+        } else {
+            LOGGER.warning("workspaceName is null or empty, not adding to environment");
+        }
+
         int index = 1;
         for (BuildData buildData : build.getActions(BuildData.class)) {
             ChangeSet cset = buildData.getChangeset();

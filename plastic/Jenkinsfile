@@ -1,5 +1,13 @@
 pipeline {
-    agent any
+    agent {
+        node {
+            label ''
+        }
+    }
+
+    options {
+        skipDefaultCheckout()
+    }
 
     parameters {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
@@ -7,65 +15,60 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout and Verify') {
             steps {
-                echo "===== PlasticSCM Plugin Test ====="
-                echo "Testing custom workspace feature..."
-                echo "Branch: ${params.BRANCH}"
-                echo "Workspace: ${params.WORKSPACE_NAME}"
-
-                // Test custom workspace name in checkout step
                 script {
-                    echo "Current directory: ${pwd()}"
+                    echo "Performing manual checkout into custom workspace: ${params.WORKSPACE_NAME}"
 
-                    // Try to query the Plastic workspace
-                    def workspaceListResult = sh(script: 'cm workspace list --format={wkname} 2>&1 || true', returnStdout: true).trim()
-                    echo "Available workspaces: ${workspaceListResult}"
+                    // Use ws() to change to custom workspace location
+                    def workspaceRoot = sh(script: 'dirname ${WORKSPACE}', returnStdout: true).trim()
+                    def customWorkspacePath = "${workspaceRoot}/${params.WORKSPACE_NAME}"
 
-                    // Check what workspace we're using
-                    def currentWkResult = sh(script: 'cm gwp 2>&1 || echo "Not a workspace"', returnStdout: true).trim()
-                    echo "Current plastic workspace: ${currentWkResult}"
+                    echo "Custom workspace path: ${customWorkspacePath}"
 
-                    sh 'ls -la'
-                }
-            }
-        }
+                    ws(customWorkspacePath) {
+                        // Checkout from Plastic SCM
+                        checkout scm
+                        echo "✓ Checked out into: ${env.WORKSPACE}"
 
-        stage('Verify') {
-            steps {
-                echo "Verifying PlasticSCM checkout..."
-                script {
-                    // Check if we're in a Plastic workspace
-                    def hasPlastic = fileExists('.plastic')
-                    if (hasPlastic) {
-                        echo "✓ Plastic workspace detected"
-                    } else {
-                        echo "✗ No Plastic workspace found"
-                    }
+                        // Verify checkout
+                        echo "Verifying PlasticSCM checkout..."
+                        def hasPlastic = fileExists('.plastic')
+                        if (hasPlastic) {
+                            echo "✓ Plastic workspace detected"
+                        } else {
+                            echo "✗ No Plastic workspace found"
+                        }
 
-                    // Verify Jenkinsfile was fetched correctly
-                    echo "✓ Jenkinsfile successfully loaded from Plastic SCM"
-                    echo "✓ Parameter resolution working"
-                }
-            }
-        }
+                        echo "✓ Jenkinsfile successfully loaded from Plastic SCM"
+                        echo "✓ Parameter resolution working"
 
-        stage('Test Custom Workspace') {
-            steps {
-                echo "Testing custom workspace name feature..."
-                echo "Expected workspace: ${params.WORKSPACE_NAME}"
+                        // Test custom workspace
+                        echo "Testing custom workspace name feature..."
+                        echo "Expected workspace: ${params.WORKSPACE_NAME}"
 
-                script {
-                    // This will help us verify the custom workspace name is being used
-                    if (isUnix()) {
-                        sh 'echo "Workspace path: ${WORKSPACE}"'
+                        def workspacePath = sh(script: 'echo ${WORKSPACE}', returnStdout: true).trim()
+                        def workspaceName = sh(script: 'basename ${WORKSPACE}', returnStdout: true).trim()
+
+                        echo "Workspace path: ${workspacePath}"
+                        echo "Workspace name: ${workspaceName}"
+
+                        // Check if workspace name matches expected custom workspace name
+                        if (workspaceName != params.WORKSPACE_NAME) {
+                            error("✗ FAILED: Workspace name '${workspaceName}' does not match expected '${params.WORKSPACE_NAME}'")
+                        } else {
+                            echo "✓ Custom workspace name verified: ${workspaceName}"
+                        }
+
+                        // Verify we're in a Plastic workspace
                         sh 'cm status --machinereadable || echo "cm command not available (expected in test environment)"'
+
+                        echo "✓ Custom workspace test completed"
                     }
                 }
-
-                echo "✓ Custom workspace test completed"
             }
         }
+
     }
 
     post {
